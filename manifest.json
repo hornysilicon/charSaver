@@ -1,0 +1,8 @@
+{
+    "display_name": "Character Saver",
+    "loading_order": 100,
+    "js": "index.js",
+    "author": "hornysilicon",
+    "version": "1.0.0",
+    "homePage": "https://github.com/hornysilicon/charSaver"
+}
