@@ -1,6 +1,6 @@
 # Character Saver - SillyTavern Extension
 
-A SillyTavern extension that automatically creates chat lorebook (World Info) entries when the AI introduces new characters.
+A SillyTavern extension that automatically creates chat lorebook entries when the AI introduces new characters.
 
 ## Features
 
@@ -8,115 +8,108 @@ A SillyTavern extension that automatically creates chat lorebook (World Info) en
 - Creates chat-bound lorebook entries with character names and descriptions
 - Removes character introduction blocks from the chat after processing
 - Supports multiple character introductions in a single message
+- Supports flexible character name formats:
+  - `**Name:** John Doe`
+  - `Name: John Doe`
+  - `**John Doe**`
+- Auto-creates a lorebook if none exists
 - Shows toast notifications when characters are added
 
 ## Installation
 
-1. Copy this extension folder to your SillyTavern installation:
-   - **For all users:** `public/scripts/extensions/third-party/charSaver/`
-   - **For current user:** `data/user/scripts/extensions/third-party/charSaver/`
+1. In SillyTavern, go to **Extensions → Manage Extensions**
+2. Click the **Install from URL** button
+3. Paste this URL: `https://github.com/hornysilicon/charSaver`
+4. Click **Install**
+5. Enable the extension in the extensions list
 
-2. Restart SillyTavern
+## Setup
 
-3. Enable the extension in **Extensions → Manage Extensions**
+For the extension to work, you need to instruct the AI to use the special delimiters when introducing characters.
 
-## Usage
+### Adding to Your System Prompt
 
-### 1. Set up a World Info (Lorebook)
-
-Before using Character Saver, make sure you have a World Info file attached to your chat:
-
-1. Open a chat
-2. Click the **World Info** button (book icon)
-3. Select an existing World Info file or create a new one
-
-### 2. Prompt the AI to Use Character Delimiters
-
-When you want the AI to introduce a new character, include instructions to use the special delimiters. Example:
+Add this to your system prompt or global preset:
 
 ```
-When introducing new characters, wrap their introduction like this:
+When introducing new NPCs, provide a quick full description between `<!-- new character start` and `new character end -->`. The description must include:
+- The character's Name
 
-<!-- new character start -->
-**Character Name**: A brief description of their appearance, personality, and role.
-<!-- new character end -->
+Example format:
+<!-- new character start
+Name: John Doe
+**Physical description:** Tall, lean, with short brown hair and blue eyes.
+**Mannerisms:** Speaks slowly, taps his fingers when thinking.
+-->
 ```
 
-### 3. Character Introduction Format
+### Adding to Character Cards
 
-The AI should format character introductions like this:
+You can also add this directly to your character card's "System Prompt" field or personality section.
 
-```html
-<!-- new character start -->
-**Eldrin Shadowweaver**: A tall elf with silver hair and piercing violet eyes. He wears dark robes adorned with arcane symbols. As the court mage, he serves as advisor to the queen.
-<!-- new character end -->
+## Character Introduction Format
+
+The extension supports flexible formats. Here are examples that will all work:
+
+### Format 1: With field labels
+```
+<!-- new character start
+Name: Verena Cortez
+Physical description: Early 30s, 170cm, lean build. Dark brown skin, close-cropped hair.
+Mannerisms: Speaks precisely, rarely blinks.
+-->
 ```
 
-The extension will:
-- Extract "Eldrin Shadowweaver" as the character name
-- Save the description as the lorebook content
-- Remove the entire block from the chat message
-- Add the character as a keyword in your World Info
-
-### 4. Multiple Characters
-
-You can introduce multiple characters in one response:
-
-```html
-<!-- new character start -->
-**Lady Seraphina**: Elegant noblewoman with golden curls and emerald eyes.
-<!-- new character end -->
-
-The knights approached cautiously.
-
-<!-- new character start -->
-**Sir Gareth**: Weathered warrior with a scarred face and graying beard.
-<!-- new character end -->
+### Format 2: Bolded field labels
+```
+<!-- new character start
+**Name:** Danny Pham
+**Physical description:** Late 20s, round face, short black hair.
+**Occupation:** Junior financial analyst.
+-->
 ```
 
-## Example Prompts
-
-### Prompt for Character Creation
-
+### Format 3: Just a bolded name
 ```
-From now on, whenever you introduce a new named character in the story, format their introduction like this:
-
-<!-- new character start -->
-**Character Name**: Description of their appearance, personality, background, and role in the story.
-<!-- new character end -->
-
-After the introduction block, continue the story normally without repeating the character details.
+<!-- new character start
+**Marcus Doyle**
+A large security supervisor in his late 30s with a shaved head and a noticeable limp.
+-->
 ```
 
-### System Instructions (for character card)
+## Supported Name Formats
 
-You can also add this to your character card's system prompt:
+The extension recognizes character names in various formats:
+- `Name: Character Name`
+- `**Name:** Character Name`
+- `**Name**: Character Name`
+- `**Character Name**` (standalone bolded name)
 
-```
-Character Introduction Format:
-When introducing new characters, use this format:
-<!-- new character start -->
-**Name**: Description
-<!-- new character end -->
-```
+## How It Works
+
+1. When the AI generates a message with character introductions
+2. The extension detects the special delimiters
+3. Extracts the character name and description
+4. Creates a lorebook entry with the character name as the keyword
+5. Removes the introduction block from the displayed message
 
 ## Troubleshooting
 
 ### Extension not working
 
-- Make sure you have a World Info file attached to the chat
-- Check that the extension is enabled in Extensions → Manage Extensions
+- Make sure the extension is enabled in Extensions → Manage Extensions
+- Check that your system prompt includes the delimiter instructions
 - Open the browser console (F12) and check for errors prefixed with [CharacterSaver]
 
-### No World Info active warning
+### No lorebook active warning
 
-The extension requires a chat-bound World Info file to work. Create one in the World Info panel before using.
+The extension will automatically create a lorebook for your chat if one doesn't exist. The new lorebook will be named "Chat Lorebook YYYY-MM-DD".
 
 ### Characters not being detected
 
-- Verify the AI is using the correct delimiters: `<!-- new character start -->` and `<!-- new character end -->`
-- The character name should be bolded (using markdown `**`) followed by a colon
+- Verify the AI is using the correct delimiters: `<!-- new character start` and `new character end -->`
 - Check the browser console for parsing errors
+- Make sure the character name is in one of the supported formats
 
 ## Files
 
@@ -126,7 +119,7 @@ The extension requires a chat-bound World Info file to work. Create one in the W
 
 ## License
 
-MIT License - feel free to modify and distribute.
+MIT License
 
 ## Author
 

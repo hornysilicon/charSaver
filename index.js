@@ -3,39 +3,47 @@
 
 const MODULE_NAME = 'CharacterSaver';
 
-// Import required functions from SillyTavern
+// Constants for character block delimiters
+const START_DELIMITER = '<!-- new character start';
+const END_DELIMITER = '-->';
+
+// Import required modules
+// Note: Third-party extensions are in public/scripts/extensions/third-party/NAME/
+// So we need to go up 4 levels to reach public/
 import {
     chat,
     chat_metadata,
-} from '../../../script.js';
+    updateMessageBlock,
+    saveChatConditional,
+    saveMetadata,
+} from '../../../../script.js';
 
 import {
     METADATA_KEY,
-    worldInfo,
     world_names,
-    createWorldInfoEntry,
     loadWorldInfo,
+    createWorldInfoEntry,
     saveWorldInfo,
-} from '../../../scripts/world-info.js';
+    createNewWorldInfo,
+    updateWorldInfoList,
+} from '../../../../scripts/world-info.js';
 
 import {
     eventSource,
     event_types,
-} from '../../../scripts/events.js';
+} from '../../../../scripts/events.js';
 
-import {
-    updateMessageBlock,
-    saveChatConditional,
-} from '../../../script.js';
+console.log(`[${MODULE_NAME}] All imports successful`);
 
-// Constants for character block delimiters
-const START_DELIMITER = '<!-- new character start -->';
-const END_DELIMITER = '<!-- new character end -->';
+/**
+ * Escapes special regex characters
+ */
+function escapeRegExp(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 /**
  * Detects all character introduction blocks in a message
- * @param {string} messageContent - The message text to search
- * @returns {Array} Array of character block strings
  */
 function detectCharacterBlocks(messageContent) {
     const blocks = [];
@@ -53,44 +61,52 @@ function detectCharacterBlocks(messageContent) {
 }
 
 /**
- * Escapes special regex characters
- * @param {string} string - String to escape
- * @returns {string} Escaped string
- */
-function escapeRegExp(string) {
-    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-/**
  * Parses a character block to extract name and description
- * @param {string} block - The character block text
- * @returns {Object|null} Object with name and description, or null if parsing fails
  */
 function parseCharacterBlock(block) {
     try {
-        // Remove delimiters
         let content = block
             .replace(new RegExp(escapeRegExp(START_DELIMITER), 'gi'), '')
             .replace(new RegExp(escapeRegExp(END_DELIMITER), 'gi'), '')
             .trim();
 
-        // Try to extract character name (assumes format: **Name**: description)
-        // This pattern matches bold text followed by a colon
-        const namePattern = /\*\*([^*]+)\*\*\s*:/;
-        const nameMatch = content.match(namePattern);
+        // Look for Name: field (with or without bold markdown, various whitespace)
+        // Or just a bolded name like **John Doe**
+        const namePatterns = [
+            /\*\*Name\*\*:\s*(.+)/im,           // **Name:** X
+            /\*\*Name\*\*:\s*(.+)/im,            // **Name**: X
+            /Name\s*:\s*(.+)/im,                 // Name: X
+            /^\*\*([^*]+)\*\*\s*$/m,             // **John Doe** (standalone, first line)
+            /\*\*([^*]+)\*\*\s*[\r\n]/,          // **John Doe** (followed by newline)
+        ];
 
-        if (!nameMatch) {
-            console.warn(`[${MODULE_NAME}] Could not extract character name from block`);
-            return null;
+        let characterName = null;
+        let namePatternUsed = null;
+
+        for (const pattern of namePatterns) {
+            const match = content.match(pattern);
+            if (match) {
+                characterName = match[1].trim();
+                namePatternUsed = pattern;
+                console.log(`[${MODULE_NAME}] Found character name: '${characterName}'`);
+                break;
+            }
         }
 
-        const characterName = nameMatch[1].trim();
-        const description = content.replace(namePattern, '').trim();
+        if (!characterName) {
+            console.warn(`[${MODULE_NAME}] Could not extract character name from block`);
+            console.debug(`[${MODULE_NAME}] Block content:`, content);
+            return null;
+        }
 
         if (!characterName) {
             console.warn(`[${MODULE_NAME}] Empty character name in block`);
             return null;
         }
+
+        // The entire block (excluding delimiters) is the description
+        // Remove the Name line from the description to avoid redundancy
+        const description = namePatternUsed ? content.replace(namePatternUsed, '').trim() : content.trim();
 
         return {
             name: characterName,
@@ -103,66 +119,7 @@ function parseCharacterBlock(block) {
 }
 
 /**
- * Gets the current chat's World Info name
- * @returns {string|null} The World Info name or null if none is active
- */
-function getCurrentWorldInfoName() {
-    const worldName = chat_metadata[METADATA_KEY];
-
-    if (!worldName || !world_names.includes(worldName)) {
-        return null;
-    }
-
-    return worldName;
-}
-
-/**
- * Creates a new lorebook entry for a character
- * @param {string} worldName - The World Info file name
- * @param {string} characterName - The character's name
- * @param {string} description - The character's description
- * @returns {Promise<boolean>} True if successful, false otherwise
- */
-async function createLorebookEntry(worldName, characterName, description) {
-    try {
-        // Load the World Info data
-        const worldData = await loadWorldInfo(worldName);
-
-        if (!worldData) {
-            console.error(`[${MODULE_NAME}] Failed to load World Info: ${worldName}`);
-            return false;
-        }
-
-        // Create a new entry
-        const newEntry = createWorldInfoEntry(worldName, worldData);
-
-        // Set up the entry with character data
-        newEntry.key = [characterName];
-        newEntry.keysecondary = [];
-        newEntry.content = description;
-        newEntry.comment = `Character: ${characterName}`;
-        newEntry.order = 100; // Default priority
-        newEntry.constant = false;
-        newEntry.selective = false; // Activate on any keyword match
-        newEntry.depth = 4; // Default scan depth
-        newEntry.probability = 100; // Always activate when matched
-        newEntry.position = 0; // Default position (before context)
-
-        // Save the changes
-        await saveWorldInfo(worldName, worldData, true);
-
-        console.log(`[${MODULE_NAME}] Created lorebook entry for: ${characterName}`);
-        return true;
-    } catch (error) {
-        console.error(`[${MODULE_NAME}] Error creating lorebook entry:`, error);
-        return false;
-    }
-}
-
-/**
  * Removes character introduction blocks from a message
- * @param {string} messageContent - The original message content
- * @returns {string} The message content with blocks removed
  */
 function removeCharacterBlocks(messageContent) {
     const regex = new RegExp(
@@ -174,16 +131,100 @@ function removeCharacterBlocks(messageContent) {
 }
 
 /**
+ * Gets or creates the current chat's World Info name
+ */
+async function getOrCreateWorldInfoName() {
+    let worldName = chat_metadata[METADATA_KEY];
+
+    console.log(`[${MODULE_NAME}] Detected World Info name: '${worldName}'`);
+    console.log(`[${MODULE_NAME}] Available World Info books:`, world_names);
+
+    // Check if World Info exists and is valid
+    if (worldName && world_names.includes(worldName)) {
+        return worldName;
+    }
+
+    // No World Info exists - create one
+    console.log(`[${MODULE_NAME}] No World Info found. Creating new one...`);
+
+    // Generate a name for the new World Info based on the chat
+    const newWorldName = `Chat Lorebook ${new Date().toISOString().slice(0, 10)}`;
+
+    try {
+        // Create the new World Info
+        await createNewWorldInfo(newWorldName, { interactive: false });
+
+        console.log(`[${MODULE_NAME}] Created new World Info: '${newWorldName}'`);
+
+        // Update the chat metadata to use the new World Info
+        chat_metadata[METADATA_KEY] = newWorldName;
+
+        // Save the metadata
+        await saveMetadata();
+
+        console.log(`[${MODULE_NAME}] Attached World Info to chat`);
+
+        // Refresh the world_names list
+        await updateWorldInfoList();
+
+        return newWorldName;
+    } catch (error) {
+        console.error(`[${MODULE_NAME}] Failed to create World Info:`, error);
+        return null;
+    }
+}
+
+/**
+ * Creates a new lorebook entry for a character
+ */
+async function createLorebookEntry(worldName, characterName, description) {
+    try {
+        console.log(`[${MODULE_NAME}] Creating entry for '${characterName}' in World Info: '${worldName}'`);
+
+        const worldData = await loadWorldInfo(worldName);
+
+        if (!worldData) {
+            console.error(`[${MODULE_NAME}] Failed to load World Info: ${worldName}`);
+            return false;
+        }
+
+        console.log(`[${MODULE_NAME}] World Info loaded, entries before:`, Object.keys(worldData.entries || {}).length);
+
+        const newEntry = createWorldInfoEntry(worldName, worldData);
+
+        console.log(`[${MODULE_NAME}] Created new entry with UID:`, newEntry.uid);
+
+        newEntry.key = [characterName];
+        newEntry.keysecondary = [];
+        newEntry.content = description;
+        newEntry.comment = `Character: ${characterName}`;
+        newEntry.order = 100;
+        newEntry.constant = false;
+        newEntry.selective = false;
+        newEntry.depth = 4;
+        newEntry.probability = 100;
+        newEntry.position = 0;
+
+        console.log(`[${MODULE_NAME}] Saving World Info with`, Object.keys(worldData.entries || {}).length, 'entries');
+
+        await saveWorldInfo(worldName, worldData, true);
+
+        console.log(`[${MODULE_NAME}] World Info saved successfully for: ${characterName}`);
+        return true;
+    } catch (error) {
+        console.error(`[${MODULE_NAME}] Error creating lorebook entry:`, error);
+        return false;
+    }
+}
+
+/**
  * Processes a newly received message for character introductions
- * @param {number} messageId - The ID of the message to process
  */
 async function processMessage(messageId) {
     try {
-        // Get the message from the chat
         const message = chat[messageId];
 
         if (!message || message.is_user || message.is_system) {
-            // Skip user messages and system messages
             return;
         }
 
@@ -193,25 +234,21 @@ async function processMessage(messageId) {
             return;
         }
 
-        // Check if there's a World Info active for this chat
-        const worldName = getCurrentWorldInfoName();
+        const worldName = await getOrCreateWorldInfoName();
 
         if (!worldName) {
-            console.warn(`[${MODULE_NAME}] No World Info active for this chat. Skipping character detection.`);
+            console.warn(`[${MODULE_NAME}] Could not get or create World Info`);
             return;
         }
 
-        // Detect character introduction blocks
         const characterBlocks = detectCharacterBlocks(messageContent);
 
         if (characterBlocks.length === 0) {
-            // No character introductions found
             return;
         }
 
         console.log(`[${MODULE_NAME}] Found ${characterBlocks.length} character introduction(s)`);
 
-        // Process each character block
         const createdCharacters = [];
 
         for (const block of characterBlocks) {
@@ -230,18 +267,13 @@ async function processMessage(messageId) {
             }
         }
 
-        // If we created any entries, update the message
         if (createdCharacters.length > 0) {
-            // Remove the character blocks from the message
+            console.log(`[${MODULE_NAME}] Message BEFORE edit:\n${messageContent}`);
             message.mes = removeCharacterBlocks(messageContent);
-
-            // Update the message display
+            console.log(`[${MODULE_NAME}] Message AFTER edit:\n${message.mes}`);
             updateMessageBlock(messageId, message);
-
-            // Save the chat
             await saveChatConditional();
 
-            // Show notification
             const names = createdCharacters.join(', ');
             if (typeof toastr !== 'undefined') {
                 toastr.success(
@@ -258,20 +290,15 @@ async function processMessage(messageId) {
     }
 }
 
-// Set up event listener when the extension loads
-(function init() {
-    console.log(`[${MODULE_NAME}] Extension loaded`);
+// Set up event listener
+eventSource.on(event_types.MESSAGE_RECEIVED, async (chatId, type) => {
+    console.log(`[${MODULE_NAME}] MESSAGE_RECEIVED event: chatId=${chatId}, type=${type}`);
+    if (chatId >= 0 && chat[chatId] && !chat[chatId].is_user) {
+        await processMessage(chatId);
+    }
+});
 
-    // Listen for MESSAGE_RECEIVED events
-    eventSource.on(event_types.MESSAGE_RECEIVED, async (chatId, type) => {
-        // Process all AI messages (skip user messages)
-        if (chatId >= 0 && chat[chatId] && !chat[chatId].is_user) {
-            await processMessage(chatId);
-        }
-    });
-
-    console.log(`[${MODULE_NAME}] Event listener registered for MESSAGE_RECEIVED`);
-})();
+console.log(`[${MODULE_NAME}] Extension initialized successfully`);
 
 // Export for debugging
 if (typeof globalThis !== 'undefined') {

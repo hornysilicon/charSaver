@@ -1,6 +1,8 @@
 {
     "display_name": "Character Saver",
     "loading_order": 100,
+    "requires": [],
+    "optional": [],
     "js": "index.js",
     "author": "hornysilicon",
     "version": "1.0.0",
