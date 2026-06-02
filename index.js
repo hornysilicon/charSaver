@@ -16,6 +16,7 @@ import {
     updateMessageBlock,
     saveChatConditional,
     saveMetadata,
+    name2,
 } from '../../../../script.js';
 
 import {
@@ -147,8 +148,13 @@ async function getOrCreateWorldInfoName() {
     // No World Info exists - create one
     console.log(`[${MODULE_NAME}] No World Info found. Creating new one...`);
 
-    // Generate a name for the new World Info based on the chat
-    const newWorldName = `Chat Lorebook ${new Date().toISOString().slice(0, 10)}`;
+    // Generate a name for the new World Info using the character name
+    const characterName = name2 || 'Chat';
+    // Format: YYYY-MM-DD HH:MM (example: 2026-06-02 14:30)
+    const now = new Date();
+    const dateStr = now.toISOString().slice(0, 10);
+    const timeStr = now.toTimeString().slice(0, 5); // HH:MM
+    const newWorldName = `${characterName} Chat Lorebook ${dateStr} ${timeStr}`;
 
     try {
         // Create the new World Info
